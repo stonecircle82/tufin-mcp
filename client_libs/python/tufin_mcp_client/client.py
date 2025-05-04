@@ -1,12 +1,20 @@
 import httpx
 from typing import Optional, Dict, Any, List
 
-# Placeholder models - ideally import/share from the main app models 
-# or define client-specific representations
-class TicketResponse:
-    pass
-class DeviceResponse:
-    pass
+# Import MCP API Response Models (adjust path if library moves outside main project)
+# Assuming models are accessible relative to where the client might be used IN the project
+# If packaged separately, this dependency needs management.
+try:
+    from src.app.models.securechange import TicketResponse, TicketListResponse
+    from src.app.models.securetrack import DeviceResponse, DeviceListResponse, TopologyPathResponse
+except ImportError:
+    # Fallback or simplified models if run standalone - less ideal
+    print("Warning: Could not import full Pydantic models. Using basic placeholders.")
+    class TicketResponse: pass
+    class TicketListResponse: pass
+    class DeviceResponse: pass
+    class DeviceListResponse: pass
+    class TopologyPathResponse: pass
 
 # Define more specific exception class
 class TufinMCPClientError(Exception):
@@ -70,39 +78,65 @@ class TufinMCPClient:
         return self._request("GET", "/health")
     
     # --- SecureChange Tickets --- 
-    def list_tickets(self, params: Optional[Dict] = None) -> Dict[str, Any]:
-        """List SecureChange tickets. Returns raw API response dict."""
-        return self._request("GET", "/api/v1/tickets", params=params)
+    def list_tickets(self, params: Optional[Dict] = None) -> TicketListResponse:
+        """List SecureChange tickets. Parses response into TicketListResponse model."""
+        raw_response = self._request("GET", "/api/v1/tickets", params=params)
+        try:
+            return TicketListResponse.model_validate(raw_response)
+        except Exception as e:
+            raise TufinMCPClientError(f"Failed to parse list_tickets response: {e}") from e
         
-    def create_ticket(self, ticket_data: Dict) -> Dict[str, Any]:
-        """Create a SecureChange ticket. Returns raw API response dict."""
-        return self._request("POST", "/api/v1/tickets", json=ticket_data)
+    def create_ticket(self, ticket_data: Dict) -> TicketResponse:
+        """Create a SecureChange ticket. Parses response into TicketResponse model."""
+        # Requires workflow_name and details dict within ticket_data
+        raw_response = self._request("POST", "/api/v1/tickets", json=ticket_data)
+        try:
+            return TicketResponse.model_validate(raw_response)
+        except Exception as e:
+            raise TufinMCPClientError(f"Failed to parse create_ticket response: {e}") from e
         
-    def get_ticket(self, ticket_id: int) -> Dict[str, Any]:
-        """Get details for a specific SecureChange ticket. Returns raw API response dict."""
-        return self._request("GET", f"/api/v1/tickets/{ticket_id}")
+    def get_ticket(self, ticket_id: int) -> TicketResponse:
+        """Get details for a specific SecureChange ticket. Parses response into TicketResponse model."""
+        raw_response = self._request("GET", f"/api/v1/tickets/{ticket_id}")
+        try:
+            return TicketResponse.model_validate(raw_response)
+        except Exception as e:
+            raise TufinMCPClientError(f"Failed to parse get_ticket response: {e}") from e
 
-    def update_ticket(self, ticket_id: int, ticket_data: Dict) -> Dict[str, Any]:
-        """Update an existing SecureChange ticket. Returns raw API response dict."""
-        return self._request("PUT", f"/api/v1/tickets/{ticket_id}", json=ticket_data)
+    def update_ticket(self, ticket_id: int, ticket_data: Dict) -> TicketResponse:
+        """Update an existing SecureChange ticket. Parses response into TicketResponse model."""
+        raw_response = self._request("PUT", f"/api/v1/tickets/{ticket_id}", json=ticket_data)
+        try:
+            return TicketResponse.model_validate(raw_response)
+        except Exception as e:
+            raise TufinMCPClientError(f"Failed to parse update_ticket response: {e}") from e
 
     # --- SecureTrack Devices --- 
-    def list_devices(self, params: Optional[Dict] = None) -> Dict[str, Any]:
-        """List SecureTrack devices. Returns raw API response dict."""
-        return self._request("GET", "/api/v1/devices", params=params)
+    def list_devices(self, params: Optional[Dict] = None) -> DeviceListResponse:
+        """List SecureTrack devices. Parses response into DeviceListResponse model."""
+        raw_response = self._request("GET", "/api/v1/devices", params=params)
+        try:
+            return DeviceListResponse.model_validate(raw_response)
+        except Exception as e:
+            raise TufinMCPClientError(f"Failed to parse list_devices response: {e}") from e
         
-    def get_device(self, device_id: int) -> Dict[str, Any]:
-        """Get details for a specific SecureTrack device. Returns raw API response dict."""
-        return self._request("GET", f"/api/v1/devices/{device_id}")
+    def get_device(self, device_id: str) -> DeviceResponse: # Changed ID to str
+        """Get details for a specific SecureTrack device. Parses response into DeviceResponse model."""
+        raw_response = self._request("GET", f"/api/v1/devices/{device_id}")
+        try:
+            return DeviceResponse.model_validate(raw_response)
+        except Exception as e:
+            raise TufinMCPClientError(f"Failed to parse get_device response: {e}") from e
 
     # --- SecureTrack Topology --- 
-    def get_topology_map(self) -> Dict[str, Any]:
-        """Get the SecureTrack topology map. Returns raw API response dict."""
-        return self._request("GET", "/api/v1/topology/map")
-        
-    def run_topology_query(self, query_data: Dict) -> Dict[str, Any]:
-        """Run a SecureTrack topology query. Returns raw API response dict."""
-        return self._request("POST", "/api/v1/topology/query", json=query_data)
+    def get_topology_path(self, params: Dict) -> TopologyPathResponse:
+        """Run a SecureTrack topology path query. Parses response into TopologyPathResponse model."""
+        # Expects params dict with src, dst, service
+        raw_response = self._request("GET", "/api/v1/topology/path", params=params)
+        try:
+            return TopologyPathResponse.model_validate(raw_response)
+        except Exception as e:
+            raise TufinMCPClientError(f"Failed to parse get_topology_path response: {e}") from e
 
     def __enter__(self):
         return self

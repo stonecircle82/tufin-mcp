@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status, Query, Request, HTTPException
+from fastapi import APIRouter, Depends, status, Query, Request, HTTPException, Response
 from typing import List, Any, Optional
 
 # Import dependencies
@@ -131,6 +131,52 @@ async def get_topology_path_query(
     )
     
     return mcp_response
+
+@router.get(
+    "/topology/path/image", # New path for image
+    # responses is used to describe the binary response in OpenAPI
+    responses={
+        200: {
+            "content": {"image/png": {}}, # Assume PNG, adjust if needed
+            "description": "Topology path image generated successfully."
+        },
+        401: {"description": "Unauthorized"},
+        403: {"description": "Forbidden"},
+        404: {"description": "Path or resources not found to generate image"},
+        429: {"description": "Rate Limit Exceeded"},
+        502: {"description": "Error retrieving data from Tufin"},
+        504: {"description": "Tufin API Timeout"}
+    },
+    tags=["SecureTrack Topology"],
+    dependencies=[Depends(require_permission("get_topology_path_image"))]
+)
+@limiter.limit("10/minute") # Limit image generation requests
+async def get_topology_path_image(
+    request: Request,
+    src: str = Query(..., description="Source IP address or object name"),
+    dst: str = Query(..., description="Destination IP address or object name (with optional port like host:port)"),
+    service: str = Query(..., description="Service name (e.g., 'any', 'Facebook') or port/protocol (e.g., 'tcp:80')"),
+    tufin_client: TufinApiClient = Depends(get_tufin_client)
+) -> Response:
+    """
+    Get the topology path image from SecureTrack.
+    Requires get_topology_path_image permission.
+    Returns image data (e.g., PNG).
+    """
+    try:
+        image_bytes = await tufin_client.get_topology_path_image(
+            src=src, dst=dst, service=service
+        )
+        # Determine media type (default to png, could be configurable or detected)
+        media_type = "image/png" 
+        return Response(content=image_bytes, media_type=media_type)
+    except HTTPException as e:
+        # Re-raise HTTP exceptions from the client
+        raise e
+    except Exception as e:
+        # Catch unexpected errors during image retrieval
+        logger.error(f"Unexpected error getting topology image: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error retrieving topology image")
 
 # Removed original POST /topology/query placeholder
 # TODO: Implement /topology/query endpoint -> This was the placeholder, now removed. 

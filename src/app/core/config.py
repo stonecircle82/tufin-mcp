@@ -45,7 +45,16 @@ class Settings(BaseSettings):
         "get_ticket": [UserRole.ADMIN, UserRole.TICKET_MANAGER, UserRole.USER],
         "update_ticket": [UserRole.ADMIN, UserRole.TICKET_MANAGER],
         "get_topology_path": [UserRole.ADMIN, UserRole.TICKET_MANAGER],
+        "get_topology_path_image": [UserRole.ADMIN, UserRole.TICKET_MANAGER, UserRole.USER],
         "test_tufin_connection": [UserRole.ADMIN], # Keep example endpoint permission
+    }
+
+    # Maps allowable Workflow Names to list of roles that can create tickets for them
+    # Example: {"Firewall Rule Change": [UserRole.ADMIN, UserRole.TICKET_MANAGER], "Server Decom": [UserRole.ADMIN]}
+    # Needs configuration based on actual Tufin workflow names
+    ALLOWED_WORKFLOWS: Dict[str, List[UserRole]] = {
+        "Example Firewall Workflow": [UserRole.ADMIN, UserRole.TICKET_MANAGER, UserRole.USER],
+        "Example Decom Workflow": [UserRole.ADMIN, UserRole.TICKET_MANAGER],
     }
 
     # --- Development Settings --- 

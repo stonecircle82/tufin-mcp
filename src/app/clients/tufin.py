@@ -10,7 +10,7 @@ from ..models.securetrack import (
 )
 from ..models.securechange import (
     TicketResponse, TicketCreate, TicketListResponse, TicketUpdate, 
-    TufinTicketListResponse 
+    TufinTicketListResponse, TufinTicket
 )
 
 logger = logging.getLogger(__name__)
@@ -148,26 +148,60 @@ class TufinApiClient:
                 detail="Failed to parse response from Tufin API (Topology Path)"
             )
 
+    async def get_topology_path_image(self, src: str, dst: str, service: str) -> bytes:
+        """Gets the topology path image from SecureTrack."""
+        # Endpoint assumed based on user input and documentation link
+        url = f"{self.securetrack_base_url}/securetrack/api/topology/path_image"
+        params = {"src": src, "dst": dst, "service": service}
+        logger.info(f"Requesting SecureTrack topology path image via {url} with params {params}")
+        
+        # Make GET request, expect binary response
+        # Use the base _request method but handle potential non-JSON response outside
+        try:
+            response = await self._client.request("GET", url, params=params)
+            response.raise_for_status()
+            # Return raw image bytes
+            return response.content
+        except httpx.TimeoutException as e:
+            logger.error(f"Tufin API request timed out: {e}")
+            raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Tufin API request timed out")
+        except httpx.RequestError as e:
+            logger.error(f"Error connecting to Tufin API: {e}")
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"Could not connect to Tufin API: {e.url}")
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Tufin API returned error {e.response.status_code} for path image: {e.response.text}")
+            detail = f"Tufin API error: {e.response.status_code} - {e.response.text[:100]}..."
+            raise HTTPException(status_code=e.response.status_code, detail=detail)
+
     # TODO: Implement topology methods
 
     # --- SecureChange Methods --- 
     
-    async def create_securechange_ticket(self, ticket_data: TicketCreate) -> TicketResponse:
-        """Creates a new ticket in SecureChange."""
-        # Assuming the endpoint path is /securechangeworkflow/api/securechange/tickets
-        # Verify this against Tufin documentation!
+    async def create_securechange_ticket(self, workflow_name: str, ticket_details: Dict[str, Any]) -> TufinTicket:
+        """Creates a new ticket in SecureChange using a specific workflow."""
+        # Path verified by user
         url = f"{self.securechange_base_url}/securechangeworkflow/api/securechange/tickets"
-        logger.info(f"Creating SecureChange ticket via {url}")
+        logger.info(f"Creating SecureChange ticket for workflow '{workflow_name}' via {url}")
         
-        # Prepare request body from Pydantic model
-        request_body = ticket_data.model_dump(exclude_unset=True) # Only send fields that were set
+        # Construct the request body expected by Tufin's addTicket
+        # This structure needs verification based on Tufin API examples
+        # Assuming common fields are passed within the main ticket structure
+        # along with workflow-specific fields from ticket_details.
+        request_body = {
+            "ticket": {
+                "workflow": {"name": workflow_name},
+                # Add common fields if they are expected here (e.g., subject, priority)
+                # **ticket_details should contain the workflow-specific fields
+                **ticket_details 
+            }
+        }
         
+        logger.debug(f"Tufin create ticket request body: {request_body}") # Be careful logging potentially sensitive details
         response = await self._request("POST", url, json=request_body)
         
-        # Parse the response using the Pydantic model
+        # Parse the response using the detailed TufinTicket model
         try:
-            # Assuming the response body directly contains the created ticket object
-            created_ticket = TicketResponse.model_validate(response.json())
+            created_ticket = TufinTicket.model_validate(response.json())
             logger.info(f"Successfully created SecureChange ticket ID: {created_ticket.id}")
             return created_ticket
         except Exception as e:
@@ -177,23 +211,24 @@ class TufinApiClient:
                 detail="Failed to parse response from Tufin API (Create Ticket)"
             )
 
-    async def list_securechange_tickets(self, limit: int = 100, offset: int = 0, filters: Optional[Dict[str, Any]] = None) -> TufinTicketListResponse:
+    async def list_securechange_tickets(self, filters: Optional[Dict[str, Any]] = None) -> TufinTicketListResponse:
         """Lists tickets from SecureChange. Returns the parsed Tufin response structure."""
-        # Assuming endpoint path is /securechangeworkflow/api/securechange/tickets
-        # Verify this against Tufin documentation!
+        # Endpoint verified from user input
         url = f"{self.securechange_base_url}/securechangeworkflow/api/securechange/tickets"
-        params = {"offset": offset, "limit": limit}
+        params = {}
         if filters:
             # Implement proper filter formatting based on Tufin docs
             # Example: might need to join filters into a single query param string
+            # Or Tufin might accept direct query params like ?status=Pending&requester=user1
             logger.info(f"Applying ticket filters (needs verification): {filters}")
             params.update(filters) # Simple add for now, likely needs adjustment
             
         logger.info(f"Requesting SecureChange tickets from {url} with params: {params}")
-        response = await self._request("GET", url, params=params)
+        response = await self._request("GET", url, params=params if params else None)
         
-        # Parse the response using the Tufin-specific Pydantic model
+        # Parse the response using the detailed Tufin-specific Pydantic model
         try:
+            # This model now includes the 'ticket' list and next/previous links
             parsed_response = TufinTicketListResponse.model_validate(response.json())
             return parsed_response
         except Exception as e:
@@ -203,17 +238,16 @@ class TufinApiClient:
                 detail="Failed to parse response from Tufin API (Ticket List)"
             )
 
-    async def get_securechange_ticket(self, ticket_id: int) -> TicketResponse:
-        """Gets details for a specific ticket from SecureChange."""
-        # Assuming endpoint path is /securechangeworkflow/api/securechange/tickets/{ticket_id}
-        # Verify this against Tufin documentation!
+    async def get_securechange_ticket(self, ticket_id: int) -> TufinTicket:
+        """Gets details for a specific ticket from SecureChange. Returns the parsed Tufin structure."""
+        # Endpoint verified from user input
         url = f"{self.securechange_base_url}/securechangeworkflow/api/securechange/tickets/{ticket_id}"
         logger.info(f"Requesting SecureChange ticket details from {url}")
         response = await self._request("GET", url)
         
-        # Parse the response
+        # Parse the response using the detailed TufinTicket model
         try:
-            parsed_response = TicketResponse.model_validate(response.json())
+            parsed_response = TufinTicket.model_validate(response.json())
             return parsed_response
         except Exception as e:
             logger.error(f"Failed to parse Tufin ticket details response: {e}", exc_info=True)
@@ -222,7 +256,7 @@ class TufinApiClient:
                 detail="Failed to parse response from Tufin API (Ticket Details)"
             )
 
-    async def update_securechange_ticket(self, ticket_id: int, ticket_data: TicketUpdate) -> TicketResponse:
+    async def update_securechange_ticket(self, ticket_id: int, ticket_data: TicketUpdate) -> TufinTicket: # Updated return type
         """Updates an existing ticket in SecureChange."""
         # Assuming endpoint path is PUT /securechangeworkflow/api/securechange/tickets/{ticket_id}
         # Verify this against Tufin documentation!
@@ -236,7 +270,7 @@ class TufinApiClient:
         
         # Parse the response
         try:
-            updated_ticket = TicketResponse.model_validate(response.json())
+            updated_ticket = TufinTicket.model_validate(response.json())
             logger.info(f"Successfully updated SecureChange ticket ID: {updated_ticket.id}")
             return updated_ticket
         except Exception as e:

@@ -12,6 +12,7 @@ setup(
     packages=find_packages(where="."), # Find packages in the current directory
     install_requires=[
         "httpx>=0.20",
+        "pydantic>=2.0" # Added Pydantic for response models
         # Add pydantic if returning models later
     ],
     classifiers=[

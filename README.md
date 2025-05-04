@@ -206,6 +206,7 @@ The API structure is defined in `openapi.yaml`. You can explore this file direct
 *   `GET /api/v1/topology/map`: Get SecureTrack topology map.
 *   `POST /api/v1/topology/query`: Run a SecureTrack topology query.
 *   `GET /api/v1/topology/path`: Run a SecureTrack topology path query. Returns a **summarized** result including `traffic_allowed`, `is_fully_routed`, and `path_device_names` (if allowed/routed).
+*   `GET /api/v1/topology/path/image`: Get the topology path as an image (e.g., PNG).
 
 **Note:** Implementation requires verification against Tufin 25.1 REST API docs. Filter implementation needs checking against specific Tufin API syntax.
 
@@ -232,10 +233,8 @@ curl -G -H "X-API-Key: $MCP_API_KEY" "$MCP_URL/api/v1/topology/path" \
      --data-urlencode "src=1.1.1.1" \
      --data-urlencode "dst=8.8.8.8" \
      --data-urlencode "service=tcp:443"
-# Example Response:
-# {"traffic_allowed": true, "is_fully_routed": true, "path_device_names": ["firewall-a", "router-b"]}
-# or
-# {"traffic_allowed": false, "is_fully_routed": true, "path_device_names": null}
+# Example Topology Path Image Request (save to file)
+curl -H "X-API-Key: $MCP_API_KEY" "$MCP_URL/api/v1/topology/path/image?src=1.1.1.1&dst=8.8.8.8&service=tcp:443" -o topology_path.png
 ```
 
 ## OpenAPI Specification
@@ -276,27 +275,35 @@ with TufinMCPClient(base_url=SERVER_URL, api_key=API_KEY) as client:
         print(f"Health: {health}")
         
         devices = client.list_devices()
-        print(f"Devices Found: {devices.get('total', 0)}")
+        print(f"Devices Found: {devices.total}")
         
         # Example: Get first device if list is not empty
-        if devices.get('devices'):
-            first_device_id = devices['devices'][0]['id']
+        if devices.devices:
+            first_device_id = devices.devices[0].id
             device_details = client.get_device(first_device_id)
-            print(f"Device {first_device_id}: {device_details}")
+            print(f"Device {first_device_id}: {device_details.name} ({device_details.vendor})")
         
         # Example: Create Ticket 
-        ticket_data = {"subject": "Client Lib Test", "description": "Testing ticket creation"}
+        ticket_data = {
+            "workflow_name": "Example Firewall Workflow", # Check configured workflows
+            "subject": "Client Lib Test", 
+            "details": { # Workflow specific fields go here
+                "description": "Testing ticket creation via client",
+                "priority": "Medium"
+                 # Add other fields required by the specific workflow
+            }
+        }
         created_ticket = client.create_ticket(ticket_data)
-        print(f"Created Ticket: {created_ticket}")
-        ticket_id = created_ticket.get('id')
+        print(f"Created Ticket ID: {created_ticket.id}, Status: {created_ticket.status}")
+        ticket_id = created_ticket.id
         
         if ticket_id:
             retrieved_ticket = client.get_ticket(ticket_id)
-            print(f"Retrieved Ticket {ticket_id}: {retrieved_ticket}")
+            print(f"Retrieved Ticket {ticket_id}: Subject: {retrieved_ticket.subject}")
             
             updated_data = {"status": "In Progress"} # Check actual updatable fields
             updated_ticket = client.update_ticket(ticket_id, updated_data)
-            print(f"Updated Ticket {ticket_id}: {updated_ticket}")
+            print(f"Updated Ticket {ticket_id}: Status: {updated_ticket.status}")
             
     except TufinMCPClientError as e:
         print(f"MCP Client Error: {e}")
@@ -307,7 +314,75 @@ with TufinMCPClient(base_url=SERVER_URL, api_key=API_KEY) as client:
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
 ```
-**Note:** The client library provides basic functionality and error handling (`TufinMCPClientError`). It currently returns raw dictionary responses which should ideally be parsed into models. Further enhancements are planned (see Roadmap).
+**Note:** The client library provides basic functionality, error handling (`TufinMCPClientError`), and returns Pydantic models for responses. Further enhancements are planned (see Roadmap).
+
+## JavaScript / TypeScript Client Library
+
+A basic TypeScript client library structure is provided in `client_libs/javascript/`.
+
+### Installation
+
+```bash
+# From your JS/TS project directory
+npm install <path_to_client_libs/javascript> 
+# or link for local development
+# cd client_libs/javascript && npm link && cd ../../ && npm link tufin-mcp-client-js
+
+# Or if published to npm:
+# npm install tufin-mcp-client-js 
+```
+Make sure to build the client first if installing from source: `cd client_libs/javascript && npm run build && cd ../..`
+
+### Usage Example (TypeScript)
+
+```typescript
+import { TufinMCPClient, TufinMCPClientError } from 'tufin-mcp-client-js'; // Adjust import path
+
+const SERVER_URL = 'http://localhost:8000'; // Your MCP Server URL
+const API_KEY = 'your_api_key_here';
+
+const client = new TufinMCPClient(SERVER_URL, API_KEY);
+
+async function runClient() {
+    try {
+        const health = await client.getHealth();
+        console.log('Health:', health);
+
+        const devices = await client.listDevices({ limit: 5 }); // Example param
+        console.log(`Devices Found: ${devices.total}`);
+        console.log('First device:', devices.devices[0]);
+        
+        // Example: Create Ticket
+        const ticketData = {
+            workflow_name: 'Example Firewall Workflow', // Check configured workflows
+            subject: 'TS Client Test',
+            details: {
+                description: 'Testing ticket from TS client',
+                priority: 'Low'
+                // Add other workflow-specific fields
+            }
+        };
+        const createdTicket = await client.createTicket(ticketData);
+        console.log(`Created Ticket ID: ${createdTicket.id}, Status: ${createdTicket.status}`);
+
+    } catch (error) {
+        if (error instanceof TufinMCPClientError) {
+            console.error('MCP Client Error:', error.message);
+            if (error.status) {
+                console.error('  Status Code:', error.status);
+            }
+            if (error.data) {
+                console.error('  Response Data:', error.data);
+            }
+        } else {
+            console.error('An unexpected error occurred:', error);
+        }
+    }
+}
+
+runClient();
+```
+**Note:** This client is basic. It needs further development for comprehensive error handling, potential model parsing (if not relying on `any`), and more robust type safety.
 
 ## Integrating with AI Tools
 
@@ -345,14 +420,12 @@ This list reflects known TODOs and potential future improvements:
     *   Add comprehensive unit and integration tests covering client logic, API endpoints, security, and error handling.
 *   **Client Library:**
     *   Enhance the Python client library (error handling, response models/parsing).
-    *   Potentially add a JS/TS version.
+    *   Enhance the JS/TS client library (error handling, build process).
 *   **Tufin Client Refinements:**
     *   Add configurable timeouts and retry logic to the `httpx` client in `src/app/clients/tufin.py`.
 *   **Deployment & DX:**
     *   Add further deployment guidance (e.g., Kubernetes manifests, production Gunicorn settings).
     *   Configure FastAPI to serve `openapi.yaml` and interactive docs (Swagger UI/Redoc).
-*   **Topology Path Image:**
-    *   Add endpoint for Topology Path Image (`/securetrack/api/topology/path_image`).
 
 ## License
 

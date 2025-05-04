@@ -437,6 +437,67 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/topology/path/image:
+    get:
+      tags:
+        - SecureTrack Topology
+      summary: Get Topology Path Image
+      description: Get the topology path image from SecureTrack. Requires get_topology_path_image permission.
+      operationId: get_topology_path_image_api_v1_topology_path_image_get
+      security:
+        - ApiKeyAuth: []
+      parameters: # Use same parameters as /topology/path
+        - name: src
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Source IP address or object name
+        - name: dst
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Destination IP address or object name (with optional port like host:port)
+        - name: service
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Service name (e.g., 'any', 'Facebook') or port/protocol (e.g., 'tcp:80')
+      responses:
+        '200':
+          description: Topology path image generated successfully.
+          content:
+            image/png: # Assume PNG, adjust if needed
+              schema:
+                type: string
+                format: binary 
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          description: Path or resources not found to generate image
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+        '502': 
+          description: Bad Gateway (Error retrieving data from Tufin)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '504':
+          description: Tufin API Timeout
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 # --- Reusable Responses (Optional but good practice) ---
 components:
   responses:

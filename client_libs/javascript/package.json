@@ -1,0 +1,27 @@
+{
+  "name": "tufin-mcp-client-js",
+  "version": "0.1.0",
+  "description": "Client library for the Tufin MCP Server API (JavaScript/TypeScript)",
+  "main": "dist/index.js", 
+  "types": "dist/index.d.ts", 
+  "scripts": {
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "tufin",
+    "mcp",
+    "api",
+    "client"
+  ],
+  "author": "Your Name <your.email@example.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0",
+    "@types/axios": "^0.14.0"
+  },
+  "dependencies": {
+    "axios": "^1.0.0" 
+  }
+} 
