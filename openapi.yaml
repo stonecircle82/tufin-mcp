@@ -1,0 +1,466 @@
+openapi: 3.0.0
+info:
+  title: Tufin MCP Server API
+  version: "0.1.0" # Match application version
+  description: |
+    MCP Server providing a unified interface to Tufin SecureTrack and SecureChange APIs.
+    Requires an API Key passed in the X-API-Key header for most endpoints.
+
+servers:
+  - url: http://localhost:8000 # Default local server, adjust as needed
+    description: Development server
+  # Add production server URL here later
+  # - url: https://your-production-mcp-server.com
+  #   description: Production server
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API Key for authenticating requests.
+
+  schemas:
+    # --- Generic Schemas --- 
+    ErrorResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: A description of the error.
+      required:
+        - detail
+
+    # --- Health Schemas --- 
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok]
+      required:
+        - status
+
+    # --- SecureChange Ticket Schemas (Based on models/securechange.py) --- 
+    TicketBase:
+      type: object
+      properties:
+        subject:
+          type: string
+        description:
+          type: string
+          nullable: true
+      required:
+        - subject
+      # Add other common fields from TicketBase here
+
+    TicketCreate:
+      allOf:
+        - $ref: '#/components/schemas/TicketBase'
+      # Add fields specific to creation here if any
+
+    TicketResponse:
+      allOf:
+        - $ref: '#/components/schemas/TicketBase'
+      properties:
+        id:
+          type: integer
+        status:
+          type: string
+      required:
+        - id
+        - status
+      # Add other fields from TicketResponse here
+
+    TicketListResponse:
+      type: object
+      properties:
+        tickets:
+          type: array
+          items:
+            $ref: '#/components/schemas/TicketResponse'
+        total:
+          type: integer
+      required:
+        - tickets
+        - total
+
+    # --- SecureTrack Device Schemas (Based on models/securetrack.py) --- 
+    DeviceResponse:
+      type: object
+      description: Device representation returned by the MCP API.
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          nullable: true
+        vendor:
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+        version:
+          type: string
+          nullable: true
+          description: Maps to Tufin OS_Version
+        ip_address:
+          type: string
+          nullable: true
+          description: Maps to Tufin ip
+        domain_name: 
+          type: string
+          nullable: true
+        status:
+          type: string
+          nullable: true
+      required:
+        - id
+      # Add other fields WE exposed in models/securetrack.py DeviceResponse
+
+    DeviceListResponse:
+      type: object
+      description: Device list representation returned by the MCP API.
+      properties:
+        devices:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeviceResponse'
+        total:
+          type: integer
+          description: Total number of devices matching the filter criteria.
+        count:
+          type: integer
+          description: Number of devices included in this response batch.
+      required:
+        - devices
+        - total
+        - count
+
+    # --- Tufin Topology Path Response Models (Complex - Keep definitions brief here) ---
+    NatEntry: # Add brief schemas or reference external file if too complex
+      type: object 
+      # ... properties ...
+    InterfaceInfo:
+      type: object
+      # ... properties ...
+    RouteInfo:
+      type: object
+      # ... properties ...
+    NextDevice:
+      type: object
+      # ... properties ...
+    IpsecInfo:
+      type: object
+      # ... properties ...
+    PbrAction:
+      type: object
+      # ... properties ...
+    PbrEntry:
+      type: object
+      # ... properties ...
+    RuleInfo:
+      type: object
+      # ... properties ...
+    BindingInfo:
+      type: object
+      # ... properties ...
+    SdwanEntry:
+      type: object
+      # ... properties ...
+    DevicePathInfo:
+      type: object
+      # ... properties ...
+    UnroutedElement:
+      type: object
+      # ... properties ...
+      
+    # TufinTopologyPathResponse: # Raw Tufin response - not directly exposed usually
+      # type: object
+      # properties: 
+      #   traffic_allowed: { type: boolean }
+      #   device_info: { type: array, items: { $ref: '#/components/schemas/DevicePathInfo' } }
+      #   unrouted_elements: { type: array, items: { $ref: '#/components/schemas/UnroutedElement' } }
+      # required: [traffic_allowed]
+
+    # --- MCP API Topology Path Response --- 
+    TopologyPathResponse: # Updated definition
+      type: object
+      description: Summarized path query response returned by the MCP API for easier consumption.
+      properties:
+        traffic_allowed:
+          type: boolean
+          description: Indicates if the specified traffic is allowed according to the policy analysis.
+        is_fully_routed:
+          type: boolean
+          description: Indicates if a complete route was found (no unrouted elements).
+        path_device_names:
+          type: array
+          nullable: true
+          description: List of device names in the path (only populated if traffic_allowed and is_fully_routed are true).
+          items: 
+            type: string
+        # Removed complex fields
+        # path_details: 
+        #   type: array
+        #   nullable: true
+        #   items: 
+        #     $ref: '#/components/schemas/DevicePathInfo' # Reference the complex nested object
+        # unrouted_elements:
+        #   type: array
+        #   nullable: true
+        #   items:
+        #     $ref: '#/components/schemas/UnroutedElement'
+      required:
+        - traffic_allowed
+        - is_fully_routed
+
+paths:
+  /health:
+    get:
+      tags:
+        - Management
+      summary: Health Check
+      description: Simple health check endpoint. Does not require authentication.
+      operationId: health_check
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  
+  /api/v1/tickets:
+    get:
+      tags:
+        - SecureChange Tickets
+      summary: List Tickets
+      description: List SecureChange tickets based on query parameters. Requires list_tickets permission.
+      operationId: list_tickets_api_v1_tickets_get
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        # TODO: Add query parameters for filtering (status, assignee, etc.) based on implementation
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 100
+            minimum: 1
+            maximum: 1000
+          description: Maximum number of tickets to return.
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+          description: Number of tickets to skip.
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketListResponse'
+        '401':
+          description: Unauthorized (Missing or invalid API Key)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden (Insufficient permissions)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too Many Requests (Rate limit exceeded)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+        - SecureChange Tickets
+      summary: Create Ticket
+      description: Create a new SecureChange ticket. Requires create_ticket permission.
+      operationId: create_ticket_api_v1_tickets_post
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketCreate'
+      responses:
+        '201':
+          description: Successful Creation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError' # Reference common response
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+        # Add 422 Validation Error if needed
+
+  /api/v1/devices:
+    get:
+      tags:
+        - SecureTrack Devices
+      summary: List Devices
+      description: List SecureTrack devices based on query parameters. Requires list_devices permission.
+      operationId: list_devices_api_v1_devices_get
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by device status (e.g., 'started', 'stopped')
+        - name: name
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by device name (check Tufin docs for syntax/matching)
+        - name: vendor
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by vendor name
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceListResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+  /api/v1/devices/{device_id}:
+    get:
+      tags:
+        - SecureTrack Devices
+      summary: Get Device
+      description: Get details for a specific SecureTrack device. Requires get_device permission.
+      operationId: get_device_api_v1_devices__device_id__get
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The ID of the device to retrieve.
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+        '404': # Assuming a 404 if device not found
+          $ref: '#/components/responses/NotFoundError' 
+
+  /api/v1/topology/path: # Changed path from /query
+    get: # Changed method from POST to GET
+      tags:
+        - SecureTrack Topology
+      summary: Get Topology Path
+      description: Run a topology path query in SecureTrack. Requires run_topology_query permission.
+      operationId: get_topology_path_api_v1_topology_path_get # Updated ID
+      security:
+        - ApiKeyAuth: []
+      parameters: # Changed from requestBody to parameters
+        - name: src
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Source IP address or object name
+        - name: dst
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Destination IP address or object name (with optional port like host:port)
+        - name: service
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Service name (e.g., 'any', 'Facebook') or port/protocol (e.g., 'tcp:80')
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TopologyPathResponse' # Updated schema ref
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+        '502': # Added for potential parsing errors
+          description: Bad Gateway (Error parsing Tufin response)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+# --- Reusable Responses (Optional but good practice) ---
+components:
+  responses:
+    UnauthorizedError:
+      description: Unauthorized (Missing or invalid API Key)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ForbiddenError:
+      description: Forbidden (Insufficient permissions)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    RateLimitError:
+      description: Too Many Requests (Rate limit exceeded)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFoundError:
+      description: Resource Not Found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse' 

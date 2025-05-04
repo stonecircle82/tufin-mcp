@@ -1,0 +1,35 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dev-debug.log
+
+# Dependency directories
+node_modules/
+venv/
+scripts/
+
+# Environment variables
+.env
+
+# Editor directories and files
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.cursor
+.windsurfrules
+prd.txt
+README-task-master.md
+
+# OS specific
+.DS_Store
+
+# Task files
+tasks.json
+tasks/ 

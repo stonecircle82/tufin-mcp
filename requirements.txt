@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+pydantic-settings
+httpx
+structlog
+slowapi
+passlib[bcrypt]
