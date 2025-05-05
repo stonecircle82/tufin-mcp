@@ -1,6 +1,6 @@
 # Tufin MCP Server - Open Source Community Project
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) <!-- Optional: Add license badge -->
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) <!-- Optional: Add license badge -->
 <!-- Optional: Add build status, code coverage badges etc. -->
 
 ## Introduction
@@ -11,7 +11,7 @@ By exposing Tufin functionalities through a secure, standardized REST API with R
 
 **This is a community-driven project.** We encourage contributions! Whether it's adding new endpoint coverage, improving security, enhancing the client libraries, or fixing bugs, your input is valuable. Please check the [Contributing](#contributing) section for more details.
 
-Find the project repository on GitHub: [https://github.com/<your-username>/tufin-mcp](https://github.com/<your-username>/tufin-mcp) <!-- ** ACTION REQUIRED: Replace with your actual repo URL ** -->
+Find the project repository on GitHub: [https://github.com/stonecircle82/tufin-mcp](https://github.com/stonecircle82/tufin-mcp) <!-- ** ACTION REQUIRED: Replace with your actual repo URL ** -->
 
 ## Why Use This?
 
@@ -393,13 +393,9 @@ runClient();
 
 ## Contributing
 
-Contributions are welcome! Please feel free to:
+Contributions are welcome! Please see the [Contributing Guidelines](CONTRIBUTING.md) for details on how to get involved, report bugs, suggest features, and submit pull requests.
 
-*   **Report Bugs:** Use the GitHub Issues tracker.
-*   **Suggest Features:** Open an issue to discuss new ideas.
-*   **Submit Pull Requests:** Please follow standard Gitflow practices (e.g., create feature branches, write clear commit messages, add tests if applicable).
-
-<!-- Add specific contribution guidelines if desired -->
+We also adhere to a [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Roadmap / Future Enhancements
 
@@ -429,4 +425,4 @@ This list reflects known TODOs and potential future improvements:
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details (if one exists, otherwise state MIT License). 
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
