@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     TUFIN_PASSWORD: str = "your_tufin_password" # Consider secure handling
     TUFIN_SSL_VERIFY: bool = True # Default to True for production safety
     TUFIN_API_TIMEOUT: float = 30.0 # Default timeout in seconds
+    TUFIN_GRAPHQL_URL: Optional[str] = None # e.g., https://your-securetrack/sg/api/v1/graphql
     # Optionally add TUFIN_SSL_CERT_PATH: Optional[str] = None if using custom CA bundles
 
     # Security Settings (Placeholders - Generate strong secrets)
@@ -46,7 +47,10 @@ class Settings(BaseSettings):
         "update_ticket": [UserRole.ADMIN, UserRole.TICKET_MANAGER],
         "get_topology_path": [UserRole.ADMIN, UserRole.TICKET_MANAGER],
         "get_topology_path_image": [UserRole.ADMIN, UserRole.TICKET_MANAGER, UserRole.USER],
-        "test_tufin_connection": [UserRole.ADMIN], # Keep example endpoint permission
+        "add_devices": [UserRole.ADMIN],
+        "import_managed_devices": [UserRole.ADMIN],
+        "query_rules_graphql": [UserRole.ADMIN, UserRole.TICKET_MANAGER, UserRole.USER],
+        "test_tufin_connection": [UserRole.ADMIN],
     }
 
     # Maps allowable Workflow Names to list of roles that can create tickets for them

@@ -126,6 +126,15 @@ export class TufinMCPClient {
         return this._request<DeviceResponse>({ method: 'GET', url: `/api/v1/devices/${deviceId}` });
     }
 
+    async addDevices(devices: Array<Record<string, any>>): Promise<void> { // Returns void on 202
+        // Add one or more devices via the bulk endpoint.
+        const requestBody = { devices };
+        // Expect 202 Accepted, _request might throw on non-2xx
+        // Axios might need specific handling for 202 if not considered success by default
+        await this._request<void>({ method: 'POST', url: '/api/v1/devices/bulk', data: requestBody });
+        // If no error is thrown, assume success (202)
+    }
+
     // --- SecureTrack Topology ---
     async getTopologyPath(params: { src: string; dst: string; service: string }): Promise<TopologyPathResponse> {
         return this._request<TopologyPathResponse>({ method: 'GET', url: '/api/v1/topology/path', params });

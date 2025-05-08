@@ -139,6 +139,142 @@ components:
         - total
         - count
 
+    DeviceDataAdd:
+      type: object
+      description: "Generic placeholder for vendor/model specific device_data. Client must provide the correct structure based on Tufin documentation for the target device type."
+      additionalProperties: true
+
+    DeviceAddRequest:
+      type: object
+      description: "Request model for adding a single device within the bulk request."
+      properties:
+        display_name:
+          type: string
+        ip_address:
+          type: string
+          nullable: true
+        vendor:
+          type: string
+        model:
+          type: string
+          nullable: true
+        enable_topology:
+          type: boolean
+          default: true
+        securetrack_domain:
+          type: string
+          default: "Default"
+        device_data:
+          $ref: '#/components/schemas/DeviceDataAdd'
+      required:
+        - display_name
+        - vendor
+        - device_data
+
+    DeviceBulkAddRequest:
+      type: object
+      description: "Request model for the MCP API to add one or more devices."
+      properties:
+        devices:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeviceAddRequest'
+          minItems: 1
+      required:
+        - devices
+
+    DeviceBulkAddResponse:
+      type: object
+      description: "Response model indicating acceptance of the bulk add request."
+      properties:
+        message:
+          type: string
+        detail:
+          type: string
+          nullable: true
+      required:
+        - message
+
+    # --- Device Import Schemas ---
+    ManagedDeviceImportDetail:
+      type: object
+      description: "Details of managed devices to import (structure varies slightly by parent type)."
+      properties:
+        name:
+          type: string
+          description: "Name of the DG, ADOM, VNet, VPC, Context, or EOS device."
+        import_all:
+          type: boolean
+          nullable: true
+          description: "Applicable for Panorama, FortiManager, Meraki (import all sub-devices?)."
+        managed_devices:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: "List of specific sub-device names to import (if import_all is false for applicable types)."
+      required:
+        - name
+        
+    DeviceImportRequestData:
+      type: object
+      description: "Data specific to the import operation for a parent device."
+      properties:
+        import_all:
+          type: boolean
+          description: "Whether to import all available managed entities (used by some parent types)."
+        import_devices:
+          type: array
+          items:
+            $ref: '#/components/schemas/ManagedDeviceImportDetail'
+          description: "List of specific managed entities to import."
+        collect_rule_usage:
+          type: boolean
+          nullable: true
+        collect_object_usage:
+          type: boolean
+          nullable: true
+      required:
+        - import_all
+        - import_devices # Even if empty?
+        
+    DeviceImportItem:
+      type: object
+      description: "Represents a single parent device update in the MCP bulk import request."
+      properties:
+        device_id:
+          type: string
+          description: "ID of the existing parent management device (e.g., Panorama, FortiManager)."
+        device_data:
+          $ref: '#/components/schemas/DeviceImportRequestData'
+      required:
+        - device_id
+        - device_data
+        
+    DeviceBulkImportRequest:
+      type: object
+      description: "Request model for the MCP API to import managed devices."
+      properties:
+        devices:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeviceImportItem'
+          minItems: 1
+      required:
+        - devices
+
+    DeviceBulkImportResponse:
+      type: object
+      description: "Response model indicating acceptance of the bulk import request."
+      properties:
+        message:
+          type: string
+        detail:
+          type: string
+          nullable: true
+      required:
+        - message
+
     # --- Tufin Topology Path Response Models (Complex - Keep definitions brief here) ---
     NatEntry: # Add brief schemas or reference external file if too complex
       type: object 
@@ -216,6 +352,123 @@ components:
       required:
         - traffic_allowed
         - is_fully_routed
+
+    # --- GraphQL Rule Query Schemas ---
+    RuleQueryRequest:
+      type: object
+      properties:
+        tql_filter:
+          type: string
+          nullable: true
+          description: "Tufin Query Language (TQL) filter string."
+          example: "action accept and destination.ip 8.8.8.8"
+          
+    RuleZoneInfo:
+      type: object
+      properties:
+        text: { type: string, nullable: true }
+        
+    RuleNetworkObjectInfo:
+      type: object
+      properties:
+        text: { type: string, nullable: true }
+        zones: { type: array, nullable: true, items: { $ref: '#/components/schemas/RuleZoneInfo' } }
+        
+    RuleServiceObjectInfo:
+      type: object
+      properties:
+        text: { type: string, nullable: true }
+        
+    RuleApplicationObjectInfo:
+      type: object
+      properties:
+        text: { type: string, nullable: true }
+        
+    RuleUserObjectInfo:
+      type: object
+      properties:
+        text: { type: string, nullable: true }
+        
+    RuleInstallOnObjectInfo:
+      type: object
+      properties:
+        text: { type: string, nullable: true }
+        
+    RuleVpnObjectInfo:
+      type: object
+      properties:
+        text: { type: string, nullable: true }
+        
+    RuleMetadata:
+      type: object
+      properties:
+        certificationStatus: { type: string, nullable: true }
+        technicalOwner: { type: string, nullable: true }
+        applicationOwner: { type: string, nullable: true }
+        ruleDescription: { type: string, nullable: true }
+        businessOwner: { type: string, nullable: true }
+
+    RuleDetail:
+      type: object
+      description: "Represents selected details of a firewall rule returned by MCP."
+      properties:
+        id: { type: string }
+        name: { type: string, nullable: true }
+        action: { type: string, nullable: true }
+        comment: { type: string, nullable: true }
+        disabled: { type: boolean, nullable: true }
+        implicit: { type: boolean, nullable: true }
+        metadata: { $ref: '#/components/schemas/RuleMetadata', nullable: true }
+        source: { $ref: '#/components/schemas/RuleNetworkObjectInfo', nullable: true }
+        destination: { $ref: '#/components/schemas/RuleNetworkObjectInfo', nullable: true }
+        service: { $ref: '#/components/schemas/RuleServiceObjectInfo', nullable: true }
+        application: { $ref: '#/components/schemas/RuleApplicationObjectInfo', nullable: true }
+        user: { $ref: '#/components/schemas/RuleUserObjectInfo', nullable: true }
+        installOn: { $ref: '#/components/schemas/RuleInstallOnObjectInfo', nullable: true }
+        vpn: { $ref: '#/components/schemas/RuleVpnObjectInfo', nullable: true }
+      required: [id] 
+
+    RuleQueryResponseValues:
+      type: object
+      properties:
+        count: { type: integer }
+        values: { type: array, items: { $ref: '#/components/schemas/RuleDetail' } }
+      required: [count, values]
+
+    RuleQueryResponse:
+      type: object
+      description: "MCP API response for a rule query."
+      properties:
+        rules: { $ref: '#/components/schemas/RuleQueryResponseValues' }
+      required: [rules]
+
+# --- Reusable Responses (Optional but good practice) ---
+components:
+  responses:
+    UnauthorizedError:
+      description: Unauthorized (Missing or invalid API Key)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ForbiddenError:
+      description: Forbidden (Insufficient permissions)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    RateLimitError:
+      description: Too Many Requests (Rate limit exceeded)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFoundError:
+      description: Resource Not Found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse' 
 
 paths:
   /health:
@@ -356,6 +609,121 @@ paths:
           $ref: '#/components/responses/ForbiddenError'
         '429':
           $ref: '#/components/responses/RateLimitError'
+
+  /api/v1/devices/bulk:
+    post:
+      tags:
+        - SecureTrack Devices
+      summary: Add Devices (Bulk)
+      description: |
+        Add one or more devices to SecureTrack.
+        Requires add_devices permission.
+        The request body requires vendor/model specific data in the 'device_data' field for each device.
+        Returns 202 Accepted on success, processing happens asynchronously in Tufin.
+      operationId: add_devices_bulk_api_v1_devices_bulk_post
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceBulkAddRequest'
+      responses:
+        '202':
+          description: Request accepted for processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceBulkAddResponse'
+        '400':
+          description: Bad Request (e.g., invalid input format)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+        '500':
+          description: Internal Server Error / Error during Tufin communication
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/devices/bulk/import:
+    post:
+      tags:
+        - SecureTrack Devices
+      summary: Import Managed Devices (Bulk)
+      description: |
+        Import managed devices (Device Groups, ADOMs, Contexts, VNets, etc.) 
+        into existing parent management devices in SecureTrack.
+        Requires import_managed_devices permission.
+        The request body requires details specific to the parent device type, provided within the items of the main 'devices' list.
+        Returns 202 Accepted on success, processing happens asynchronously in Tufin.
+      operationId: import_managed_devices_bulk_api_v1_devices_bulk_import_post
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceBulkImportRequest'
+            examples: # Add examples based on Tufin docs
+              panoramaExample:
+                summary: Example for Panorama
+                value:
+                  devices:
+                    - device_id: "1" # ID of the Panorama device
+                      device_data:
+                        import_all: false
+                        import_devices:
+                          - name: "DG1"
+                            import_all: false
+                            managed_devices: ["fw1", "fw2"]
+                          - name: "DG2"
+                            import_all: true
+              asaExample:
+                summary: Example for ASA
+                value:
+                  devices:
+                    - device_id: "3" # ID of the ASA device
+                      device_data:
+                        import_all: false # Usually false for ASA contexts
+                        import_devices: # List of context names (strings, need to adapt model/client?)
+                          - name: "context1" # Name field used for consistency, value is context name
+                          - name: "context2"
+      responses:
+        '202':
+          description: Request accepted for processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceBulkImportResponse'
+        '400':
+          description: Bad Request (e.g., invalid input format or structure for device type)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+        '500':
+          description: Internal Server Error / Error during Tufin communication
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/devices/{device_id}:
     get:
@@ -498,30 +866,52 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-# --- Reusable Responses (Optional but good practice) ---
-components:
-  responses:
-    UnauthorizedError:
-      description: Unauthorized (Missing or invalid API Key)
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse'
-    ForbiddenError:
-      description: Forbidden (Insufficient permissions)
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse'
-    RateLimitError:
-      description: Too Many Requests (Rate limit exceeded)
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse'
-    NotFoundError:
-      description: Resource Not Found
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse' 
+  /api/v1/graphql/rules:
+    post:
+      tags:
+        - SecureTrack GraphQL
+      summary: Query Rules (GraphQL)
+      description: |
+        Query SecureTrack firewall rules using GraphQL and an optional TQL filter.
+        Returns a standard set of rule properties.
+        Requires query_rules_graphql permission.
+      operationId: query_rules_graphql_api_v1_graphql_rules_post
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true # Body required, but filter inside is optional
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleQueryRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleQueryResponse'
+        '400':
+          description: Bad Request (e.g., invalid TQL filter or GraphQL error)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+        '502':
+          description: Bad Gateway (Error parsing Tufin response)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Service Unavailable (Error connecting to Tufin)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse' 

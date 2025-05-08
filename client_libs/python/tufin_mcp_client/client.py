@@ -128,6 +128,14 @@ class TufinMCPClient:
         except Exception as e:
             raise TufinMCPClientError(f"Failed to parse get_device response: {e}") from e
 
+    def add_devices(self, devices: List[Dict]) -> None:
+        """Add one or more devices via the bulk endpoint."""
+        request_body = {"devices": devices}
+        # Expects 202, _request handles errors, returns None on success (204 or implied 202)
+        # We might want _request to handle 202 specifically if needed
+        self._request("POST", "/api/v1/devices/bulk", json=request_body)
+        return None # Explicitly return None to indicate accepted
+
     # --- SecureTrack Topology --- 
     def get_topology_path(self, params: Dict) -> TopologyPathResponse:
         """Run a SecureTrack topology path query. Parses response into TopologyPathResponse model."""

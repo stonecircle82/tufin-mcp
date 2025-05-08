@@ -203,10 +203,13 @@ The API structure is defined in `openapi.yaml`. You can explore this file direct
 *   `PUT /api/v1/tickets/{ticket_id}`: Update a SecureChange ticket.
 *   `GET /api/v1/devices`: List SecureTrack devices (Supports filtering by `status`, `name`, `vendor`).
 *   `GET /api/v1/devices/{device_id}`: Get SecureTrack device details.
+*   `POST /api/v1/devices/bulk`: Add one or more devices (requires vendor-specific `device_data` in request body).
+*   `POST /api/v1/devices/bulk/import`: Import managed devices (DGs, ADOMs, contexts, etc.) into existing management devices.
 *   `GET /api/v1/topology/map`: Get SecureTrack topology map.
 *   `POST /api/v1/topology/query`: Run a SecureTrack topology query.
 *   `GET /api/v1/topology/path`: Run a SecureTrack topology path query. Returns a **summarized** result including `traffic_allowed`, `is_fully_routed`, and `path_device_names` (if allowed/routed).
 *   `GET /api/v1/topology/path/image`: Get the topology path as an image (e.g., PNG).
+*   `POST /api/v1/graphql/rules`: Query SecureTrack rules using GraphQL and TQL filter.
 
 **Note:** Implementation requires verification against Tufin 25.1 REST API docs. Filter implementation needs checking against specific Tufin API syntax.
 
@@ -235,6 +238,52 @@ curl -G -H "X-API-Key: $MCP_API_KEY" "$MCP_URL/api/v1/topology/path" \
      --data-urlencode "service=tcp:443"
 # Example Topology Path Image Request (save to file)
 curl -H "X-API-Key: $MCP_API_KEY" "$MCP_URL/api/v1/topology/path/image?src=1.1.1.1&dst=8.8.8.8&service=tcp:443" -o topology_path.png
+
+# Example Add Device (Cisco ASA - requires ADMIN role & correct device_data)
+curl -X POST -H "X-API-Key: $MCP_API_KEY" -H "Content-Type: application/json" \
+     -d '{
+           "devices": [
+             {
+               "display_name": "MCP-ASA-Test",
+               "ip_address": "10.1.2.3",
+               "vendor": "Cisco",
+               "model": "ASA",
+               "securetrack_domain": "Default",
+               "enable_topology": true,
+               "device_data": {
+                 "user_name": "tufin-api-user", 
+                 "password": "tufin-api-password",
+                 "enable_password": "tufin-enable-password"
+                 # Add other ASA specific fields from Tufin docs here
+               }
+             }
+           ]
+         }' \
+     "$MCP_URL/api/v1/devices/bulk"
+
+# Example Import Managed Devices (Panorama DG)
+curl -X POST -H "X-API-Key: $MCP_API_KEY" -H "Content-Type: application/json" \
+     -d '{
+           "devices": [
+             {
+               "device_id": "1", 
+               "device_data": {
+                 "import_all": false,
+                 "import_devices": [
+                   {"name": "DG1", "import_all": false, "managed_devices": ["fw1"]}
+                 ]
+               }
+             }
+           ]
+         }' \
+     "$MCP_URL/api/v1/devices/bulk/import"
+
+# Example GraphQL Rule Query (using curl and jq for readability)
+# Find firewall rules allowing any source to 8.8.8.8
+export TQL_FILTER="destination.ip 8.8.8.8"
+curl -X POST -H "X-API-Key: $MCP_API_KEY" -H "Content-Type: application/json" \
+     -d "{\"tql_filter\": \"$TQL_FILTER\"}" \
+     "$MCP_URL/api/v1/graphql/rules" | jq
 ```
 
 ## OpenAPI Specification
@@ -246,7 +295,7 @@ An OpenAPI 3.0 specification file (`openapi.yaml`) is included in the root direc
 *   **AI Integration:** Import into platforms like ChatGPT Actions to enable interaction.
 *   **Testing Tools:** Use with tools like Postman or Insomnia.
 
-**(Optional Enhancement):** Consider configuring FastAPI to serve this specification automatically at `/openapi.yaml` and interactive documentation (Swagger UI/Redoc) at `/docs` or `/redoc`.
+**(Optional Enhancement):** Consider configuring FastAPI to serve this specification automatically at `/openapi.yaml` and interactive documentation (Swagger UI/Redoc).
 
 ## Python Client Library
 
@@ -305,6 +354,47 @@ with TufinMCPClient(base_url=SERVER_URL, api_key=API_KEY) as client:
             updated_ticket = client.update_ticket(ticket_id, updated_data)
             print(f"Updated Ticket {ticket_id}: Status: {updated_ticket.status}")
             
+            # Example Add Device
+            asa_device = {
+              "display_name": "MCP-ASA-Test-Client",
+              "ip_address": "10.1.2.4",
+              "vendor": "Cisco",
+              "model": "ASA",
+              "securetrack_domain": "Default",
+              "enable_topology": True,
+              "device_data": {
+                 "user_name": "tufin-api-user", 
+                 "password": "tufin-api-password",
+                 "enable_password": "tufin-enable-password"
+              }
+            }
+            client.add_devices([asa_device]) # Pass as a list
+            print("Device add request accepted.")
+            
+        # Example Import Managed Device
+        import_details = {
+            "devices": [
+                {
+                    "device_id": "1", # Panorama ID
+                    "device_data": {
+                        "import_all": False,
+                        "import_devices": [
+                            {"name": "DG_CLIENT", "import_all": True}
+                        ]
+                    }
+                }
+            ]
+        }
+        client.import_managed_devices(import_details)
+        print("Managed device import request accepted.")
+
+        # Example GraphQL Rule Query
+        rule_filter = "action accept and source.ip 192.168.1.0/24"
+        rules_response = client.query_rules_graphql(tql_filter=rule_filter)
+        print(f"\nFound {rules_response.rules.count} rules matching filter:")
+        for rule in rules_response.rules.values:
+            print(f"  - ID: {rule.id}, Name: {rule.name}, Action: {rule.action}")
+            
     except TufinMCPClientError as e:
         print(f"MCP Client Error: {e}")
         if e.status_code:
@@ -318,7 +408,7 @@ with TufinMCPClient(base_url=SERVER_URL, api_key=API_KEY) as client:
 
 ## JavaScript / TypeScript Client Library
 
-A basic TypeScript client library structure is provided in `client_libs/javascript/`.
+A basic TypeScript client library structure **for interacting with the MCP Server API** is provided in `client_libs/javascript/`.
 
 ### Installation
 
@@ -365,6 +455,48 @@ async function runClient() {
         const createdTicket = await client.createTicket(ticketData);
         console.log(`Created Ticket ID: ${createdTicket.id}, Status: ${createdTicket.status}`);
 
+        // Example Add Device
+        const asaDevice = {
+          display_name: "MCP-ASA-Test-JS",
+          ip_address: "10.1.2.5",
+          vendor: "Cisco",
+          model: "ASA",
+          securetrack_domain: "Default",
+          enable_topology: true,
+          device_data: {
+             user_name: "tufin-api-user", 
+             password: "tufin-api-password",
+             enable_password: "tufin-enable-password"
+          }
+        };
+        await client.addDevices([asaDevice]); // Pass as an array
+        console.log("Device add request accepted.");
+
+        // Example Import Managed Device
+        const importDetails = {
+          devices: [
+            {
+              device_id: "1", // Panorama ID
+              device_data: {
+                import_all: false,
+                import_devices: [
+                  { name: "DG_JS_CLIENT", import_all: true }
+                ]
+              }
+            }
+          ]
+        };
+        await client.importManagedDevices(importDetails);
+        console.log("Managed device import request accepted.");
+
+        // Example GraphQL Rule Query
+        const ruleFilter = "disabled true";
+        const rulesResponse = await client.queryRulesGraphQL({tql_filter: ruleFilter});
+        console.log(`\nFound ${rulesResponse.rules.count} disabled rules:`);
+        rulesResponse.rules.values.forEach(rule => {
+            console.log(`  - ID: ${rule.id}, Name: ${rule.name}`);
+        });
+
     } catch (error) {
         if (error instanceof TufinMCPClientError) {
             console.error('MCP Client Error:', error.message);
@@ -383,6 +515,10 @@ async function runClient() {
 runClient();
 ```
 **Note:** This client is basic. It needs further development for comprehensive error handling, potential model parsing (if not relying on `any`), and more robust type safety.
+
+## Direct Tufin API Client (Alternative)
+
+For scenarios where you need to bypass the MCP Server and connect directly to the Tufin APIs using basic authentication, a separate, simpler JS/TS client library is available in `client_libs/javascript_direct/`. See the README within that directory for details.
 
 ## Integrating with AI Tools
 
@@ -405,9 +541,10 @@ This list reflects known TODOs and potential future improvements:
     *   Double-check all Tufin REST API endpoint paths, methods, request parameters/bodies (especially filtering syntax/capabilities), and response structures used in `src/app/clients/tufin.py` against the official Tufin 25.1 REST documentation.
     *   Ensure Pydantic models in `src/app/models/` accurately parse the verified Tufin REST API responses.
 *   **GraphQL API Integration:**
-    *   Explore and implement endpoints leveraging the Tufin SecureTrack GraphQL API ([Docs](https://forum.tufin.com/support/kc/GraphQL/R25-1/)) for potentially richer data retrieval (e.g., devices, rules, USP).
+    *   Explore and implement endpoints leveraging the Tufin SecureTrack GraphQL API ([Docs](https://forum.tufin.com/support/kc/GraphQL/R25-1/)) for potentially richer data retrieval (e.g., devices, rules, USP). **(Rule Query Added)**
+    *   Allow dynamic selection of fields in GraphQL queries via MCP API.
 *   **Bulk Operations:**
-    *   Implement endpoints for bulk operations, such as adding/updating multiple devices from a file (e.g., CSV/Excel).
+    *   Implement endpoints for bulk operations, such as adding/updating multiple devices from a file (e.g., CSV/Excel), **and importing managed devices**.
 *   **Production Security:**
     *   Replace `InMemorySecureStore` with a production-ready solution (Database, Vault) and implement secure API key management (generation, revocation).
     *   Implement robust sensitive data masking in `src/app/core/logging_config.py`.

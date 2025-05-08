@@ -7,7 +7,10 @@ from ....core.dependencies import require_permission
 from ....clients.tufin import TufinApiClient, get_tufin_client
 from ....models.securetrack import (
     DeviceResponse, DeviceListResponse, 
-    TopologyPathResponse # Removed TopologyMapResponse
+    TopologyPathResponse, # Removed TopologyMapResponse
+    DeviceBulkAddRequest, DeviceBulkAddResponse,
+    DeviceBulkImportRequest, DeviceBulkImportResponse,
+    RuleQueryRequest, RuleQueryResponse # Add GraphQL Rule models
 )
 # Import limiter from the new location
 from ....core.limiter import limiter
@@ -180,3 +183,84 @@ async def get_topology_path_image(
 
 # Removed original POST /topology/query placeholder
 # TODO: Implement /topology/query endpoint -> This was the placeholder, now removed. 
+
+@router.post(
+    "/devices/bulk",
+    response_model=DeviceBulkAddResponse,
+    status_code=status.HTTP_202_ACCEPTED, # Match Tufin's success code
+    tags=["SecureTrack Devices"],
+    dependencies=[Depends(require_permission("add_devices"))]
+)
+@limiter.limit("10/minute") # Limit bulk operations
+async def add_devices_bulk(
+    request: Request,
+    add_request: DeviceBulkAddRequest,
+    tufin_client: TufinApiClient = Depends(get_tufin_client)
+) -> DeviceBulkAddResponse:
+    """
+    Add one or more devices to SecureTrack.
+    Requires add_devices permission.
+    The request body requires vendor/model specific data in the 'device_data' field.
+    Returns 202 Accepted on success, processing happens asynchronously in Tufin.
+    """
+    await tufin_client.add_securetrack_devices(add_request)
+    # If client doesn't raise an exception, it was accepted by Tufin
+    return DeviceBulkAddResponse(message="Device add request accepted by Tufin for processing.")
+
+@router.post(
+    "/devices/bulk/import",
+    response_model=DeviceBulkImportResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["SecureTrack Devices"],
+    dependencies=[Depends(require_permission("import_managed_devices"))]
+)
+@limiter.limit("5/minute") # Stricter limit for bulk import
+async def import_managed_devices_bulk(
+    request: Request,
+    import_request: DeviceBulkImportRequest,
+    tufin_client: TufinApiClient = Depends(get_tufin_client)
+) -> DeviceBulkImportResponse:
+    """
+    Import managed devices (Device Groups, ADOMs, Contexts, VNets, etc.) 
+    into existing parent management devices in SecureTrack.
+    Requires import_managed_devices permission.
+    The request body requires details specific to the parent device type.
+    Returns 202 Accepted on success, processing happens asynchronously in Tufin.
+    """
+    await tufin_client.import_securetrack_managed_devices(import_request)
+    return DeviceBulkImportResponse(message="Managed device import request accepted by Tufin for processing.") 
+
+@router.post(
+    "/graphql/rules", # New endpoint path
+    response_model=RuleQueryResponse,
+    tags=["SecureTrack GraphQL"],
+    dependencies=[Depends(require_permission("query_rules_graphql"))]
+)
+@limiter.limit("30/minute") # Limit potentially complex queries
+async def query_rules_graphql(
+    request: Request,
+    query_request: RuleQueryRequest,
+    tufin_client: TufinApiClient = Depends(get_tufin_client)
+) -> RuleQueryResponse:
+    """
+    Query SecureTrack firewall rules using GraphQL and a TQL filter.
+    Returns a standard set of rule properties.
+    Requires query_rules_graphql permission.
+    """
+    logger.info(f"Received GraphQL rule query with filter: {query_request.tql_filter}")
+    
+    # Call the client method which returns the parsed GraphQL data dictionary
+    graphql_data = await tufin_client.query_rules_graphql(
+        tql_filter=query_request.tql_filter
+    )
+    
+    # Validate the received data against our Pydantic response model
+    try:
+        mcp_response = RuleQueryResponse.model_validate(graphql_data)
+        return mcp_response
+    except Exception as e:
+        logger.error(f"Failed to validate GraphQL rule query response: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to parse or validate response from Tufin GraphQL API (Rules Query)"
+        ) 
